@@ -30,6 +30,9 @@ module.exports = {
         'sound-wave-3': 'soundWave 1.2s ease-in-out infinite 0.2s',
         'sound-wave-4': 'soundWave 1.2s ease-in-out infinite 0.3s',
         'sound-wave-5': 'soundWave 1.2s ease-in-out infinite 0.4s',
+        'pulse-rings': 'pulseRings 3s ease-out infinite',
+        'audio-wave': 'audioWave 1.5s ease-in-out infinite',
+        'breathe': 'breathe 4s ease-in-out infinite',
       },
       keyframes: {
         gradient: {
@@ -64,6 +67,19 @@ module.exports = {
         soundWave: {
           '0%, 100%': { height: '0.5rem', opacity: '0.6' },
           '50%': { height: '1.5rem', opacity: '1' },
+        },
+        pulseRings: {
+          '0%': { transform: 'scale(0.8)', opacity: '0.8' },
+          '50%': { transform: 'scale(1.1)', opacity: '0.4' },
+          '100%': { transform: 'scale(0.8)', opacity: '0.8' },
+        },
+        audioWave: {
+          '0%, 100%': { transform: 'scaleY(0.5)', opacity: '0.5' },
+          '50%': { transform: 'scaleY(1)', opacity: '1' },
+        },
+        breathe: {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.03)' },
         },
       },
     },
