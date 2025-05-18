@@ -643,7 +643,7 @@ export default function Home() {
                 
                 <div className="relative w-48 h-48 flex items-center justify-center">
                   {/* Bola principal pulsante */}
-                  <motion.div
+                  <motion.div 
                     className="absolute w-32 h-32 bg-gradient-to-br from-primary-green to-dark-green rounded-full shadow-lg"
                     style={{
                       boxShadow: '0 0 20px rgba(76, 175, 80, 0.3)',
@@ -778,8 +778,8 @@ export default function Home() {
                           </>
                         )}
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="white" className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                        </svg>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                          </svg>
                       </button>
                     </div>
                   )}
@@ -828,20 +828,20 @@ export default function Home() {
               </h2>
             </div>
           </div>
-
+          
           {/* Resto do conteúdo do chat */}
           <div className="flex-1 p-4 overflow-y-auto">
-            {messages.map((message) => (
+                {messages.map((message) => (
               <div
-                key={message.id}
-                className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
-              >
+                    key={message.id}
+                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                  >
                 <div className="max-w-md p-2 rounded-lg bg-very-light-green">
                   {message.text}
-                </div>
-              </div>
+                            </div>
+                            </div>
             ))}
-          </div>
+                        </div>
 
           {/* Área de input */}
           <div className="p-4 bg-white">
@@ -888,8 +888,8 @@ export default function Home() {
                       </>
                     )}
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="white" className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                    </svg>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                      </svg>
                   </button>
                 </div>
               )}
@@ -899,4 +899,4 @@ export default function Home() {
       )}
     </main>
   );
-}
+} 
