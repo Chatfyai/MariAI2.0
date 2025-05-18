@@ -14,7 +14,65 @@ interface Message {
   audioUrl?: string;
 }
 
+// Adicionar interfaces para o SpeechRecognition
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+// Remover a declaração global e modificar a interface SpeechRecognition
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  onend: () => void;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
 const N8N_WEBHOOK_URL = 'https://chatfy.app.n8n.cloud/webhook-test/ebdcc93c-1fa0-4b18-8818-1af0b4db1303';
+const N8N_AUDIO_WEBHOOK_URL = 'https://chatfy.app.n8n.cloud/webhook-test/53267980-a99f-47fc-81ea-29bce15f1481';
+
+// Adicionar estilos globais no início do arquivo, após os imports
+const styles = {
+  pulseAnimation: {
+    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+  }
+};
+
+// Adicionar keyframes no componente principal, antes do return
+const keyframes = `
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.1); opacity: 1; }
+  }
+`;
 
 export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -26,11 +84,47 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [recognizedText, setRecognizedText] = useState('');
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   // Efeito para rolar para o final do chat quando novas mensagens chegarem
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Modificar a inicialização do SpeechRecognition
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognitionAPI) {
+          const recognition = new SpeechRecognitionAPI();
+          recognition.continuous = false;
+          recognition.interimResults = false;
+          recognition.lang = 'pt-BR';
+
+          recognition.onresult = (event: any) => {
+            const text = event.results[0][0].transcript;
+            setRecognizedText(text);
+            sendMessageToN8N(text);
+          };
+
+          recognition.onerror = (event: any) => {
+            console.error('Erro no reconhecimento de voz:', event.error);
+            setIsRecording(false);
+          };
+
+          recognition.onend = () => {
+            setIsRecording(false);
+          };
+
+          recognitionRef.current = recognition;
+        }
+      } catch (error) {
+        console.error('Erro ao inicializar reconhecimento de voz:', error);
+      }
+    }
+  }, []);
 
   // Função para simular reprodução de áudio
   const playAudio = (messageId: number) => {
@@ -92,7 +186,10 @@ export default function Home() {
       setIsLoading(true);
       console.log('Enviando mensagem para n8n:', message);
 
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      // Escolher o webhook correto baseado no modo
+      const webhookUrl = isAudioMode ? N8N_AUDIO_WEBHOOK_URL : N8N_WEBHOOK_URL;
+
+      const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -279,22 +376,195 @@ export default function Home() {
   };
 
   const questions = [
-    "Como fazer a IA aprender com o passar do tempo?",
-    "Quais são as melhores práticas de produtividade?",
-    "Como economizar tempo nas tarefas diárias?",
-    "Dicas para melhorar o trabalho remoto",
-    "Sugestões para organizar minha agenda",
-    "Como otimizar meu fluxo de trabalho?",
-    "Como escrever e-mails mais eficientes?",
-    "Ideias para reuniões mais produtivas",
-    "Dicas para melhorar minha concentração",
-    "Como gerenciar projetos complexos?",
-    "Técnicas de brainstorming eficazes",
-    "Como automatizar tarefas repetitivas?",
+    "Onde fica a loja Naturalys?",
+    "Qual o método de pagamento aceito na loja Naturalys?",
+    "Quais produtos são vendidos na loja Naturalys?",
+    "A loja Naturalys oferece entrega?",
+    "Quais são os horários de funcionamento da loja Naturalys?",
+    "A loja Naturalys tem produtos orgânicos?",
+    "A loja Naturalys faz descontos?",
+    "A loja Naturalys tem programa de fidelidade?",
+    "A loja Naturalys aceita cartões de crédito?",
+    "A loja Naturalys tem estacionamento?",
+    "A loja Naturalys faz entregas em toda a cidade?",
+    "A loja Naturalys tem produtos importados?"
   ];
 
   // Duplicar as perguntas para criar um efeito contínuo
   const duplicatedQuestions = [...questions, ...questions];
+
+  // Função para iniciar/parar gravação
+  const toggleRecording = () => {
+    if (!recognitionRef.current) return;
+
+    if (!isRecording) {
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (error) {
+        console.error('Erro ao iniciar gravação:', error);
+      }
+    } else {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  // Atualizar a função sendTestMessage
+  const sendTestMessage = async () => {
+    console.log('=== INÍCIO DO TESTE DE ÁUDIO ===');
+    
+    if (isLoading) {
+      console.log('Bloqueado: já está carregando');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    try {
+      const payload = {
+        message: "Teste de áudio",
+        timestamp: new Date().toISOString(),
+        isAudio: true,
+        inputType: 'audio',
+        messageType: 'voice_message',
+        sessionId: Date.now().toString(),
+        userId: 'test-user',
+        platform: 'web',
+        test: true
+      };
+
+      // Adicionar mensagem do usuário imediatamente
+      const userMessage: Message = {
+        id: Date.now(),
+        text: "Teste de áudio",
+        isUser: true,
+        timestamp: new Date(),
+        isAudio: true
+      };
+      
+      setMessages(prev => [...prev, userMessage]);
+
+      const response = await fetch(N8N_AUDIO_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, audio/mp3, audio/*'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erro ${response.status}: ${errorText}`);
+      }
+
+      // Verificar o tipo de conteúdo da resposta
+      const contentType = response.headers.get('content-type');
+      console.log('Tipo de conteúdo recebido:', contentType);
+
+      let audioBlob;
+      let audioUrl;
+
+      if (contentType?.includes('audio/')) {
+        // Se a resposta é um áudio direto
+        audioBlob = await response.blob();
+        audioUrl = URL.createObjectURL(audioBlob);
+      } else {
+        // Se a resposta é JSON com dados do áudio
+        const data = await response.json();
+        console.log('Dados recebidos:', data);
+
+        if (data.data && data.data.binary) {
+          // Se o áudio está em formato binário base64
+          const binaryData = atob(data.data.binary);
+          const bytes = new Uint8Array(binaryData.length);
+          for (let i = 0; i < binaryData.length; i++) {
+            bytes[i] = binaryData.charCodeAt(i);
+          }
+          audioBlob = new Blob([bytes], { type: 'audio/mp3' });
+          audioUrl = URL.createObjectURL(audioBlob);
+        } else if (data.audio || data.audioUrl || data.mp3) {
+          // Se o áudio está em URL
+          audioUrl = data.audio || data.audioUrl || data.mp3;
+        }
+      }
+
+      if (!audioUrl) {
+        throw new Error('Nenhum áudio recebido na resposta');
+      }
+
+      // Criar mensagem da IA com o áudio
+      const aiResponse: Message = {
+        id: Date.now() + 1,
+        text: "Resposta em áudio",
+        isUser: false,
+        timestamp: new Date(),
+        isAudio: true,
+        isPlaying: true,
+        audioUrl: audioUrl
+      };
+
+      // Adicionar mensagem da IA ao chat
+      setMessages(prev => [...prev, aiResponse]);
+
+      // Reproduzir o áudio
+      if (audioRef.current) {
+        try {
+          audioRef.current.src = audioUrl;
+          await audioRef.current.play();
+          
+          // Limpar a URL do objeto quando o áudio terminar
+          audioRef.current.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            setMessages(prev => 
+              prev.map(msg => msg.id === aiResponse.id ? { ...msg, isPlaying: false } : msg)
+            );
+            setIsLoading(false);
+          };
+
+          // Em caso de erro na reprodução
+          audioRef.current.onerror = (error) => {
+            console.error('Erro na reprodução do áudio:', error);
+            URL.revokeObjectURL(audioUrl);
+            setMessages(prev => 
+              prev.map(msg => msg.id === aiResponse.id ? { ...msg, isPlaying: false } : msg)
+            );
+            setIsLoading(false);
+          };
+        } catch (error) {
+          console.error('Erro ao reproduzir áudio:', error);
+          URL.revokeObjectURL(audioUrl);
+          setTimeout(() => {
+            setMessages(prev => 
+              prev.map(msg => msg.id === aiResponse.id ? { ...msg, isPlaying: false } : msg)
+            );
+            setIsLoading(false);
+          }, 5000);
+        }
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('Erro no teste de áudio:', error);
+      
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: error instanceof Error && error.name === 'AbortError' 
+          ? "Tempo limite excedido. Por favor, tente novamente."
+          : "Erro ao processar mensagem de teste. Por favor, tente novamente.",
+        isUser: false,
+        timestamp: new Date()
+      }]);
+      
+      setIsLoading(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-white relative">
@@ -369,176 +639,42 @@ export default function Home() {
                 exit={{ opacity: 0, scale: 0.8 }}
                 className="flex flex-col items-center justify-center mb-12"
               >
-                <div className="text-center mb-8">
-                  <p className="text-dark-green font-medium text-lg mb-2">Modo de áudio ativado</p>
-                  <p className="text-gray">Clique no botão abaixo e fale sua pergunta</p>
-                </div>
+                <style>{keyframes}</style>
                 
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  className={`p-4 rounded-full ${isLoading ? 'bg-gray animate-pulse' : isRecording ? 'bg-dark-green animate-pulse' : 'bg-primary-green hover:bg-dark-green'} transition-colors text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center relative`}
-                  onClick={() => {
-                    if (isLoading) return;
-                    setIsRecording(!isRecording);
-                    // Aqui entraria a lógica para iniciar/parar gravação de áudio
-                    if (!isRecording) {
-                      // Variável para detectar períodos de silêncio
-                      let silenceTimeout: NodeJS.Timeout;
-                      let recordingDuration = 0;
-                      const checkInterval = 300; // Verificar a cada 300ms
-                      
-                      // Simular detecção de fala e silêncio
-                      const detectSpeech = setInterval(() => {
-                        recordingDuration += checkInterval;
-                        
-                        // Simulação aleatória de detecção de fala (em um cenário real, isso seria baseado em níveis de áudio)
-                        const isSpeaking = Math.random() > 0.3 && recordingDuration < 5000;
-                        
-                        if (isSpeaking) {
-                          // Se detectar fala, cancelar o timeout de silêncio anterior
-                          clearTimeout(silenceTimeout);
-                          
-                          // E configurar um novo timeout para verificar o silêncio
-                          silenceTimeout = setTimeout(() => {
-                            // Se ficar em silêncio por 1.5 segundos, finalizar a gravação
-                            setIsRecording(false);
-                            clearInterval(detectSpeech);
-                            
-                            // Iniciar processamento
-                            setIsLoading(true);
-                            
-                            // Simular uma resposta após "processamento de áudio"
-                            setTimeout(() => {
-                              const newMessage: Message = {
-                                id: Date.now(),
-                                text: "Você enviou um áudio. Em uma implementação real, este áudio seria processado e transcrito aqui.",
-                                isUser: true,
-                                timestamp: new Date(),
-                                isAudio: true,
-                                isPlaying: true
-                              };
-
-                              setMessages(prev => [...prev, newMessage]);
-                              
-                              // Simular término da reprodução do áudio após 3 segundos
-                              setTimeout(() => {
-                                setMessages(prev => 
-                                  prev.map(msg => msg.id === newMessage.id ? { ...msg, isPlaying: false } : msg)
-                                );
-                                
-                                // Enviar para o n8n e processar resposta automaticamente
-                                sendMessageToN8N("Demonstração de funcionalidade de áudio");
-                              }, 3000);
-                            }, 1000);
-                          }, 1500); // 1.5 segundos de silêncio para considerar que parou de falar
-                        }
-                        
-                        // Se a gravação durar mais de 10 segundos, encerra automaticamente
-                        if (recordingDuration > 10000) {
-                          setIsRecording(false);
-                          clearInterval(detectSpeech);
-                          clearTimeout(silenceTimeout);
-                          
-                          // Processar o áudio
-                          setIsLoading(true);
-                          setTimeout(() => {
-                            const newMessage: Message = {
-                              id: Date.now(),
-                              text: "Você enviou um áudio longo. Em uma implementação real, este áudio seria processado e transcrito aqui.",
-                              isUser: true,
-                              timestamp: new Date(),
-                              isAudio: true,
-                              isPlaying: true
-                            };
-                            
-                            setMessages(prev => [...prev, newMessage]);
-                            
-                            // Simular término da reprodução do áudio do usuário
-                            setTimeout(() => {
-                              setMessages(prev => 
-                                prev.map(msg => msg.id === newMessage.id ? { ...msg, isPlaying: false } : msg)
-                              );
-                              
-                              // Enviar para o n8n e processar resposta automaticamente
-                              sendMessageToN8N("Demonstração de funcionalidade de áudio longo");
-                            }, 3000);
-                          }, 1000);
-                        }
-                      }, checkInterval);
-                    }
-                  }}
-                >
-                  {/* Círculos de pulso animados durante a gravação */}
-                  {isRecording && (
-                    <>
-                      <div className="absolute inset-0 rounded-full bg-red-400/20 animate-ping" style={{ animationDuration: '1.5s' }}></div>
-                      <div className="absolute inset-0 rounded-full bg-red-400/30 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
-                      <div className="absolute inset-0 rounded-full bg-red-400/10 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.6s' }}></div>
-                    </>
-                  )}
-                  
-                  {/* Botão principal */}
-                  <motion.div 
-                    className={`w-40 h-40 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
-                      isLoading 
-                        ? 'bg-gray-300 cursor-not-allowed' 
-                        : isRecording 
-                          ? 'bg-red-500' 
-                          : 'bg-primary-green hover:bg-dark-green'
-                    }`}
+                <div className="relative w-48 h-48 flex items-center justify-center">
+                  {/* Bola principal pulsante */}
+                  <motion.div
+                    className="absolute w-32 h-32 bg-gradient-to-br from-primary-green to-dark-green rounded-full shadow-lg"
+                    style={{
+                      boxShadow: '0 0 20px rgba(76, 175, 80, 0.3)',
+                    }}
                     animate={{
-                      scale: isRecording ? [1, 1.05, 1] : 1,
+                      scale: [1, 1.05, 1],
+                      opacity: [0.8, 1, 0.8],
                     }}
                     transition={{
-                      duration: 1.5,
-                      repeat: isRecording ? Infinity : 0,
-                      repeatType: "reverse"
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
                     }}
                   >
-                    {isLoading ? (
-                      <div className="flex space-x-2">
-                        <div className="w-3 h-3 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-3 h-3 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-3 h-3 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                      </div>
-                    ) : isRecording ? (
-                      <div className="relative">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-14 h-14">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 7.5A2.25 2.25 0 0 1 7.5 5.25h9a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-9a2.25 2.25 0 0 1-2.25-2.25v-9Z" />
-                        </svg>
-                        
-                        {/* Ondas de áudio animadas */}
-                        <div className="absolute -right-10 top-1/2 -translate-y-1/2 flex items-end space-x-1">
-                          <div className="w-1.5 h-3 bg-white rounded-full animate-sound-wave-1"></div>
-                          <div className="w-1.5 h-4 bg-white rounded-full animate-sound-wave-2"></div>
-                          <div className="w-1.5 h-5 bg-white rounded-full animate-sound-wave-3"></div>
-                        </div>
-                        <div className="absolute -left-10 top-1/2 -translate-y-1/2 flex items-end space-x-1">
-                          <div className="w-1.5 h-5 bg-white rounded-full animate-sound-wave-3"></div>
-                          <div className="w-1.5 h-4 bg-white rounded-full animate-sound-wave-2"></div>
-                          <div className="w-1.5 h-3 bg-white rounded-full animate-sound-wave-1"></div>
-                        </div>
-                      </div>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-14 h-14">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                      </svg>
-                    )}
+                    {/* Efeito de brilho interno */}
+                    <div className="absolute inset-0 rounded-full bg-white opacity-20 blur-sm"></div>
+                    
+                    {/* Efeito de brilho externo */}
+                    <div 
+                      className="absolute -inset-2 rounded-full bg-primary-green opacity-20 blur-md"
+                      style={{
+                        animation: 'pulse 2s ease-in-out infinite',
+                      }}
+                    ></div>
                   </motion.div>
-                </button>
-                
-                <div className="mt-6 text-center">
-                  <p className="text-gray text-sm">
-                    {isRecording 
-                      ? "Gravando... Fale sua pergunta" 
-                      : isLoading 
-                        ? "Processando sua mensagem..." 
-                        : "Pressione para gravar sua voz"
-                    }
-                  </p>
-                  {isRecording && (
-                    <p className="text-xs text-primary-green mt-2">O áudio será enviado automaticamente quando você parar de falar</p>
+
+                  {/* Indicador de status */}
+                  {isLoading && (
+                    <div className="absolute -bottom-8 text-sm text-gray-600 font-medium">
+                      Processando...
+                    </div>
                   )}
                 </div>
               </motion.div>
@@ -627,111 +763,23 @@ export default function Home() {
                       <button
                         type="button"
                         disabled={isLoading}
-                        className={`p-4 rounded-full ${isLoading ? 'bg-gray animate-pulse' : isRecording ? 'bg-dark-green animate-pulse' : 'bg-primary-green hover:bg-dark-green'} transition-colors text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center relative`}
-                        onClick={() => {
-                          if (isLoading) return;
-                          setIsRecording(!isRecording);
-                          // Aqui entraria a lógica para iniciar/parar gravação de áudio
-                          if (!isRecording) {
-                            // Variável para detectar períodos de silêncio
-                            let silenceTimeout: NodeJS.Timeout;
-                            let recordingDuration = 0;
-                            const checkInterval = 300; // Verificar a cada 300ms
-                            
-                            // Simular detecção de fala e silêncio
-                            const detectSpeech = setInterval(() => {
-                              recordingDuration += checkInterval;
-                              
-                              // Simulação aleatória de detecção de fala (em um cenário real, isso seria baseado em níveis de áudio)
-                              const isSpeaking = Math.random() > 0.3 && recordingDuration < 5000;
-                              
-                              if (isSpeaking) {
-                                // Se detectar fala, cancelar o timeout de silêncio anterior
-                                clearTimeout(silenceTimeout);
-                                
-                                // E configurar um novo timeout para verificar o silêncio
-                                silenceTimeout = setTimeout(() => {
-                                  // Se ficar em silêncio por 1.5 segundos, finalizar a gravação
-                                  setIsRecording(false);
-                                  clearInterval(detectSpeech);
-                                  
-                                  // Iniciar processamento
-                                  setIsLoading(true);
-                                  
-                                  // Simular uma resposta após "processamento de áudio"
-                                  setTimeout(() => {
-                                    const newMessage: Message = {
-                                      id: Date.now(),
-                                      text: "Você enviou um áudio. Em uma implementação real, este áudio seria processado e transcrito aqui.",
-                                      isUser: true,
-                                      timestamp: new Date(),
-                                      isAudio: true,
-                                      isPlaying: true
-                                    };
-
-                                    setMessages(prev => [...prev, newMessage]);
-                                    
-                                    // Simular término da reprodução do áudio após 3 segundos
-                                    setTimeout(() => {
-                                      setMessages(prev => 
-                                        prev.map(msg => msg.id === newMessage.id ? { ...msg, isPlaying: false } : msg)
-                                      );
-                                      
-                                      // Enviar para o n8n e processar resposta automaticamente
-                                      sendMessageToN8N("Demonstração de funcionalidade de áudio");
-                                    }, 3000);
-                                  }, 1000);
-                                }, 1500); // 1.5 segundos de silêncio para considerar que parou de falar
-                              }
-                              
-                              // Se a gravação durar mais de 10 segundos, encerra automaticamente
-                              if (recordingDuration > 10000) {
-                                setIsRecording(false);
-                                clearInterval(detectSpeech);
-                                clearTimeout(silenceTimeout);
-                                
-                                // Processar o áudio
-                                setIsLoading(true);
-                                setTimeout(() => {
-                                  const newMessage: Message = {
-                                    id: Date.now(),
-                                    text: "Você enviou um áudio longo. Em uma implementação real, este áudio seria processado e transcrito aqui.",
-                                    isUser: true,
-                                    timestamp: new Date(),
-                                    isAudio: true,
-                                    isPlaying: true
-                                  };
-                                  
-                                  setMessages(prev => [...prev, newMessage]);
-                                  
-                                  // Simular término da reprodução do áudio do usuário
-                                  setTimeout(() => {
-                                    setMessages(prev => 
-                                      prev.map(msg => msg.id === newMessage.id ? { ...msg, isPlaying: false } : msg)
-                                    );
-                                    
-                                    // Enviar para o n8n e processar resposta automaticamente
-                                    sendMessageToN8N("Demonstração de funcionalidade de áudio longo");
-                                  }, 3000);
-                                }, 1000);
-                              }
-                            }, checkInterval);
-                          }
-                        }}
+                        onClick={sendTestMessage}
+                        className={`relative w-20 h-20 rounded-full ${
+                          isLoading 
+                            ? 'bg-gray' 
+                            : 'bg-primary-green hover:bg-dark-green'
+                        } transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        {isRecording ? (
+                        {isLoading && (
                           <>
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 7.5A2.25 2.25 0 0 1 7.5 5.25h9a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-9a2.25 2.25 0 0 1-2.25-2.25v-9Z" />
-                            </svg>
+                            <div className="absolute inset-0 rounded-full bg-primary-green/20 animate-ping" style={{ animationDuration: '1.5s' }}></div>
+                            <div className="absolute inset-0 rounded-full bg-primary-green/30 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
+                            <div className="absolute inset-0 rounded-full bg-primary-green/10 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.6s' }}></div>
                           </>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                          </svg>
                         )}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="white" className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                        </svg>
                       </button>
                     </div>
                   )}
@@ -752,7 +800,11 @@ export default function Home() {
           <div className="p-4 bg-white border-b border-light-green flex justify-between items-center">
             <div className="w-1/3"></div>
             <div className="w-1/3 text-center">
-              <div className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${isAudioMode ? 'bg-dark-green' : 'bg-primary-green'} text-white border ${isAudioMode ? 'border-light-green' : 'border-dark-green'} shadow-sm items-center`}>
+              <div className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+                isAudioMode ? 'bg-dark-green' : 'bg-primary-green'
+              } text-white border ${
+                isAudioMode ? 'border-light-green' : 'border-dark-green'
+              } shadow-sm items-center`}>
                 {isAudioMode ? (
                   <>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
@@ -776,281 +828,68 @@ export default function Home() {
               </h2>
             </div>
           </div>
-          
+
+          {/* Resto do conteúdo do chat */}
           <div className="flex-1 p-4 overflow-y-auto">
-            <div className="max-w-2xl mx-auto space-y-4">
-              {isAudioMode && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-very-light-green p-3 rounded-lg text-dark-green mb-4 text-center text-sm"
-                >
-                  <div className="flex items-center justify-center mb-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-                    </svg>
-                    <span className="font-medium">Modo de áudio ativado</span>
-                  </div>
-                  <p>As respostas serão automaticamente reproduzidas como áudio.</p>
-                </motion.div>
-              )}
-              <AnimatePresence>
-                {messages.map((message) => (
-                  <motion.div
-                    key={message.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                        message.isUser
-                          ? 'bg-primary-green text-white rounded-br-none'
-                          : 'bg-very-light-green text-dark-green rounded-bl-none'
-                      }`}
-                    >
-                      {message.isAudio && (
-                        <div className="flex items-center mb-2 text-xs">
-                          {message.isPlaying ? (
-                            <div className="flex items-center">
-                              <div className="w-3 h-3 bg-current rounded-full animate-pulse mr-1"></div>
-                              <span>{message.isUser ? "Enviando áudio..." : "Reproduzindo áudio..."}</span>
-                              {message.audioUrl && (
-                                <button 
-                                  onClick={() => {
-                                    // Parar o áudio
-                                    if (audioRef.current) {
-                                      audioRef.current.pause();
-                                      audioRef.current.currentTime = 0;
-                                    }
-                                    setMessages(prev => 
-                                      prev.map(msg => msg.id === message.id ? { ...msg, isPlaying: false } : msg)
-                                    );
-                                  }}
-                                  className="ml-2 p-1 rounded-full hover:bg-white/20 transition-colors"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-                                  </svg>
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <div 
-                              className="flex items-center cursor-pointer hover:opacity-80 transition-opacity" 
-                              onClick={() => playAudio(message.id)}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3 mr-1">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-                              </svg>
-                              <span>
-                                {message.audioUrl 
-                                  ? (message.isUser ? "Ouvir seu áudio" : "Ouvir resposta") 
-                                  : (message.isUser ? "Áudio enviado" : "Resposta por áudio")
-                                }
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {message.isAudio && message.isPlaying && !message.isUser && (
-                        <div className="flex justify-center my-2 h-16 bg-dark-green/5 rounded-md p-2">
-                          <motion.div 
-                            className="flex items-end space-x-1"
-                            animate={{ opacity: [0.8, 1, 0.8] }}
-                            transition={{ 
-                              duration: 2, 
-                              repeat: Infinity,
-                              repeatType: "reverse"
-                            }}
-                          >
-                            {/* Maior número de barras para uma visualização mais rica */}
-                            {Array.from({ length: 16 }).map((_, index) => (
-                              <motion.div
-                                key={index}
-                                className="w-1 bg-dark-green rounded-full"
-                                animate={{ 
-                                  height: [`${0.3 + Math.random() * 0.7}rem`, `${0.3 + Math.random() * 1.4}rem`, `${0.3 + Math.random() * 0.7}rem`] 
-                                }}
-                                transition={{ 
-                                  duration: 1 + Math.random(), 
-                                  repeat: Infinity,
-                                  repeatType: "reverse",
-                                  ease: "easeInOut"
-                                }}
-                              />
-                            ))}
-                          </motion.div>
-                        </div>
-                      )}
-
-                      {message.audioUrl && !message.isPlaying && (
-                        <div className="mt-2">
-                          <audio controls className="audio-player w-full max-w-[240px]" src={message.audioUrl}></audio>
-                        </div>
-                      )}
-
-                      <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>
-                      <span className="text-xs opacity-70 mt-1 block">
-                        {message.timestamp.toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </motion.div>
-                ))}
-                {isLoading && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex justify-start"
-                  >
-                    <div className="bg-very-light-green text-dark-green rounded-2xl rounded-bl-none px-4 py-2">
-                      <div className="flex space-x-2">
-                        <div className="w-2 h-2 bg-dark-green rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-dark-green rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-dark-green rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Elemento para referência de rolagem automática */}
-              <div ref={chatEndRef}></div>
-            </div>
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+              >
+                <div className="max-w-md p-2 rounded-lg bg-very-light-green">
+                  {message.text}
+                </div>
+              </div>
+            ))}
           </div>
 
+          {/* Área de input */}
           <div className="p-4 bg-white">
-            <form onSubmit={handleSendMessage} className="max-w-2xl mx-auto relative">
+            <form onSubmit={handleSendMessage} className="relative">
               {!isAudioMode ? (
                 <>
                   <input
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder={isLoading ? "Aguarde a resposta..." : "Digite sua mensagem..."}
-                    disabled={isLoading}
-                    className="w-full px-6 py-4 rounded-full border-2 border-light-green focus:border-primary-green focus:ring-2 focus:ring-primary-green/20 outline-none shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="Digite sua pergunta ou tópico para começar..."
+                    className="w-full px-6 py-4 rounded-full border-2 border-light-green focus:border-primary-green focus:ring-2 focus:ring-primary-green/20 outline-none shadow-lg"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleStartChat(inputMessage);
+                      }
+                    }}
                   />
                   <button 
                     type="submit"
-                    disabled={isLoading}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary-green text-white p-2 rounded-full hover:bg-dark-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary-green text-white p-2 rounded-full hover:bg-dark-green transition-colors"
                   >
-                    <PaperAirplaneIcon className="w-6 h-6" />
+                    <MagnifyingGlassIcon className="w-6 h-6" />
                   </button>
                 </>
               ) : (
-                <div className="w-full flex justify-center">
+                <div className="flex justify-center">
                   <button
                     type="button"
                     disabled={isLoading}
-                    className={`p-4 rounded-full ${isLoading ? 'bg-gray animate-pulse' : isRecording ? 'bg-dark-green animate-pulse' : 'bg-primary-green hover:bg-dark-green'} transition-colors text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center relative`}
-                    onClick={() => {
-                      if (isLoading) return;
-                      setIsRecording(!isRecording);
-                      // Aqui entraria a lógica para iniciar/parar gravação de áudio
-                      if (!isRecording) {
-                        // Variável para detectar períodos de silêncio
-                        let silenceTimeout: NodeJS.Timeout;
-                        let recordingDuration = 0;
-                        const checkInterval = 300; // Verificar a cada 300ms
-                        
-                        // Simular detecção de fala e silêncio
-                        const detectSpeech = setInterval(() => {
-                          recordingDuration += checkInterval;
-                          
-                          // Simulação aleatória de detecção de fala (em um cenário real, isso seria baseado em níveis de áudio)
-                          const isSpeaking = Math.random() > 0.3 && recordingDuration < 5000;
-                          
-                          if (isSpeaking) {
-                            // Se detectar fala, cancelar o timeout de silêncio anterior
-                            clearTimeout(silenceTimeout);
-                            
-                            // E configurar um novo timeout para verificar o silêncio
-                            silenceTimeout = setTimeout(() => {
-                              // Se ficar em silêncio por 1.5 segundos, finalizar a gravação
-                              setIsRecording(false);
-                              clearInterval(detectSpeech);
-                              
-                              // Iniciar processamento
-                              setIsLoading(true);
-                              
-                              // Simular uma resposta após "processamento de áudio"
-                              setTimeout(() => {
-                                const newMessage: Message = {
-                                  id: Date.now(),
-                                  text: "Você enviou um áudio. Em uma implementação real, este áudio seria processado e transcrito aqui.",
-                                  isUser: true,
-                                  timestamp: new Date(),
-                                  isAudio: true,
-                                  isPlaying: true
-                                };
-
-                                setMessages(prev => [...prev, newMessage]);
-                                
-                                // Simular término da reprodução do áudio após 3 segundos
-                                setTimeout(() => {
-                                  setMessages(prev => 
-                                    prev.map(msg => msg.id === newMessage.id ? { ...msg, isPlaying: false } : msg)
-                                  );
-                                  
-                                  // Enviar para o n8n e processar resposta automaticamente
-                                  sendMessageToN8N("Demonstração de funcionalidade de áudio");
-                                }, 3000);
-                              }, 1000);
-                            }, 1500); // 1.5 segundos de silêncio para considerar que parou de falar
-                          }
-                          
-                          // Se a gravação durar mais de 10 segundos, encerra automaticamente
-                          if (recordingDuration > 10000) {
-                            setIsRecording(false);
-                            clearInterval(detectSpeech);
-                            clearTimeout(silenceTimeout);
-                            
-                            // Processar o áudio
-                            setIsLoading(true);
-                            setTimeout(() => {
-                              const newMessage: Message = {
-                                id: Date.now(),
-                                text: "Você enviou um áudio longo. Em uma implementação real, este áudio seria processado e transcrito aqui.",
-                                isUser: true,
-                                timestamp: new Date(),
-                                isAudio: true,
-                                isPlaying: true
-                              };
-                              
-                              setMessages(prev => [...prev, newMessage]);
-                              
-                              // Simular término da reprodução do áudio do usuário
-                              setTimeout(() => {
-                                setMessages(prev => 
-                                  prev.map(msg => msg.id === newMessage.id ? { ...msg, isPlaying: false } : msg)
-                                );
-                                
-                                // Enviar para o n8n e processar resposta automaticamente
-                                sendMessageToN8N("Demonstração de funcionalidade de áudio longo");
-                              }, 3000);
-                            }, 1000);
-                          }
-                        }, checkInterval);
-                      }
-                    }}
+                    onClick={sendTestMessage}
+                    className={`relative w-20 h-20 rounded-full ${
+                      isLoading 
+                        ? 'bg-gray' 
+                        : 'bg-primary-green hover:bg-dark-green'
+                    } transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {isRecording ? (
+                    {isLoading && (
                       <>
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 7.5A2.25 2.25 0 0 1 7.5 5.25h9a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-9a2.25 2.25 0 0 1-2.25-2.25v-9Z" />
-                        </svg>
+                        <div className="absolute inset-0 rounded-full bg-primary-green/20 animate-ping" style={{ animationDuration: '1.5s' }}></div>
+                        <div className="absolute inset-0 rounded-full bg-primary-green/30 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
+                        <div className="absolute inset-0 rounded-full bg-primary-green/10 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.6s' }}></div>
                       </>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                      </svg>
                     )}
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="white" className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                    </svg>
                   </button>
                 </div>
               )}
@@ -1060,4 +899,4 @@ export default function Home() {
       )}
     </main>
   );
-} 
+}
